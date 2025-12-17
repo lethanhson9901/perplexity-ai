@@ -1,11 +1,10 @@
 # Triển khai Perplexity API lên Vercel
 
-FastAPI backend (có API key) chạy trong hàm Python của Vercel, hỗ trợ search thường, streaming NDJSON, upload file, và tạo tài khoản Emailnator.
+Hướng dẫn triển khai `api/search.py` (wrapper `perplexity.Client`) trên Vercel với cookie tài khoản Pro.
 
 ## 1) Chuẩn bị
 - Tài khoản Vercel + CLI (`npm i -g vercel`).
-- API key bí mật cho backend: giá trị tùy ý, ví dụ chuỗi 32 ký tự (`PPLX_API_KEY`).
-- Cookie Perplexity Pro dạng JSON (dùng cho `mode` pro/reasoning/deep research), ví dụ:
+- Cookie Perplexity Pro dạng JSON, ví dụ:
   ```json
   {
     "next-auth.session-token": "xxx",
@@ -13,76 +12,61 @@ FastAPI backend (có API key) chạy trong hàm Python của Vercel, hỗ trợ 
   }
   ```
   > Nếu copy từ cURL, có thể dùng https://curlconverter.com/python để trích `cookies = {...}` rồi stringify JSON.
-- (Tùy chọn) Cookie Emailnator dạng JSON cho endpoint `/v1/account` nếu muốn tự động tạo tài khoản mới (`EMAILNATOR_COOKIES`).
-- Mã nguồn repo này (đã có `api/search.py` và `vercel.json` cấu hình `maxDuration` 60s).
+- Mã nguồn repo này (đã có `api/search.py` và `vercel.json` cấu hình `maxDuration` cho hàm Python).
 
 ## 2) Thiết lập biến môi trường trên Vercel
 1. Đăng nhập: `vercel login`.
 2. Tạo biến env:
    ```bash
-   vercel env add PPLX_API_KEY          # bắt buộc
-   vercel env add PPLX_COOKIES          # JSON cookies Perplexity
-   vercel env add EMAILNATOR_COOKIES    # tùy chọn cho /v1/account
+   vercel env add PPLX_COOKIES
+   # dán chuỗi JSON cookie vào prompt
    ```
-   Hoặc qua UI: Project Settings → Environment Variables.
+   Hoặc qua UI: Project Settings → Environment Variables → key `PPLX_COOKIES`, value là chuỗi JSON ở trên (Production + Preview + Development).
 
-Lưu ý: Giá trị cookie phải là JSON hợp lệ; server sẽ trả lỗi nếu parse thất bại.
+Lưu ý: Giá trị phải là một chuỗi JSON hợp lệ; server sẽ báo lỗi nếu không parse được hoặc không phải dict.
 
 ## 3) Chạy thử cục bộ với Vercel Dev
 ```bash
-export PPLX_API_KEY='super-secret-key'
-export PPLX_COOKIES='{"next-auth.session-token":"...","next-auth.csrf-token":"..."}'
 vercel dev
 ```
-- Gọi thử search:
+- Đặt env `PPLX_COOKIES` trong shell trước khi chạy (`export PPLX_COOKIES='{"next-auth.session-token":"..."}'`).
+- Gọi thử:
   ```bash
-  curl -X POST http://localhost:3000/api/search/v1/search \
+  curl -X POST http://localhost:3000/api/search \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: $PPLX_API_KEY" \
-    -d '{"query":"Giải thích quantum computing","mode":"pro","model":"gpt-5.2"}'
+    -d '{"query":"Giải thích quantum computing", "mode":"pro", "model":"gpt-5.2"}'
   ```
-- Streaming NDJSON:
-  ```bash
-  curl -N -X POST http://localhost:3000/api/search/v1/search \
-    -H "Content-Type: application/json" \
-    -H "Accept: application/x-ndjson" \
-    -H "X-API-Key: $PPLX_API_KEY" \
-    -d '{"query":"Kể một câu chuyện ngắn","stream":true}'
-  ```
-- Upload file (multipart):
-  ```bash
-  curl -X POST http://localhost:3000/api/search/v1/search/upload \
-    -H "X-API-Key: $PPLX_API_KEY" \
-    -F query="Tóm tắt nội dung file" \
-    -F files=@document.pdf
-  ```
+- Phản hồi: `{"data": {...}}` hoặc lỗi kèm thông báo.
 
 ## 4) Triển khai lên Vercel
 ```bash
 vercel        # deploy preview
 vercel --prod # deploy production
 ```
-- Đảm bảo đã set env `PPLX_API_KEY`, `PPLX_COOKIES` (và `EMAILNATOR_COOKIES` nếu cần) cho cả Preview/Production.
+- Đảm bảo đã set env ở bước 2 cho cả môi trường Preview/Production.
 - Nếu gặp lỗi runtime, nâng cấp CLI: `npm i -g vercel@latest` và deploy lại.
+- Mặc định `maxDuration` của hàm Python đã set 60s trong `vercel.json`; nếu query Pro lâu, giữ nguyên để tránh 504 timeout.
 - Sau deploy, thử gọi:
   ```bash
-  curl -X POST https://<project>.vercel.app/api/search/v1/search \
+  curl -X POST https://<project>.vercel.app/api/search \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: $PPLX_API_KEY" \
-    -d '{"query":"Tóm tắt AI safety","mode":"pro","model":"gpt-5.2"}'
+    -d '{"query":"Tóm tắt AI safety", "mode":"pro", "model":"gpt-5.2"}'
   ```
 
-## 5) Payload API (tóm tắt)
-- Base path: `/api/search`
-- `POST /v1/search` (JSON): search thường hoặc stream (`"stream":true`)
-- `POST /v1/search/upload` (multipart): search kèm `files=@...`
-- `POST /v1/account` (JSON): tạo tài khoản mới bằng Emailnator cookies, trả về cookies mới
-- `GET /health`: không cần API key, kiểm tra trạng thái
-- `GET /v1/models`, `GET /v1/usage`: yêu cầu API key, cung cấp thông tin hỗ trợ
-
-Trường yêu cầu chính: `query` (string), các trường khác giống README (mode/model/sources/language/incognito/follow_up/files).
+## 5) Payload API
+- URL: `/api/search`
+- Method: `POST` JSON.
+- Trường:
+  - `query` (string, bắt buộc)
+  - `mode` (string, mặc định `auto`)
+  - `model` (optional, tùy `mode`)
+  - `sources` (list, mặc định `["web"]`)
+  - `language` (mặc định `en-US`)
+  - `incognito` (bool, mặc định `false`)
+  - `follow_up`, `files` (tùy chọn; `files` hiện chỉ nhận dict tên→dữ liệu, không encode multipart trong handler này).
+- Stream chưa bật; trả full JSON `{"data": ...}`.
 
 ## 6) Lưu ý bảo mật
 - Không commit cookie vào repo.
-- Luôn bật API key (`PPLX_API_KEY`) cho backend public.
+- Nếu dùng repo công khai, chỉ set `PPLX_COOKIES` trong env trên Vercel/CI.
 - Xoay cookie khi hết hạn; update biến env và redeploy (hoặc `vercel env pull` + `vercel deploy`).

@@ -7,13 +7,7 @@ websocket-client<1.9.0,>=1.5.0
 websocket-client>=1.9.0
 
 [all]
-perplexity-api[api,dev,driver]
-
-[api]
-fastapi<1.0.0,>=0.111.0
-uvicorn[standard]<1.0.0,>=0.30.0
-python-multipart>=0.0.9
-mangum<1.0.0,>=0.17.0
+perplexity-api[dev,driver]
 
 [async]
 
