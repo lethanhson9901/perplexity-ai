@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "Unofficial Python API for Perplexity.ai with account management"
 readme = "README.md"
 requires-python = ">=3.8"
+requires-python = ">=3.8.1"
 license = {text = "MIT"}
 authors = [
     {name = "ESousa97", email = "contact@perplexity.ai"},
