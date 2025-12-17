@@ -18,7 +18,7 @@ Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Classifier: Programming Language :: Python :: 3.12
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
-Requires-Python: >=3.8
+Requires-Python: >=3.8.1
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: curl_cffi>=0.5.7
@@ -36,8 +36,13 @@ Requires-Dist: black>=23.0.0; extra == "dev"
 Requires-Dist: mypy>=1.5.0; extra == "dev"
 Requires-Dist: flake8>=6.0.0; extra == "dev"
 Requires-Dist: isort>=5.12.0; extra == "dev"
+Provides-Extra: api
+Requires-Dist: fastapi<1.0.0,>=0.111.0; extra == "api"
+Requires-Dist: uvicorn[standard]<1.0.0,>=0.30.0; extra == "api"
+Requires-Dist: python-multipart>=0.0.9; extra == "api"
+Requires-Dist: mangum<1.0.0,>=0.17.0; extra == "api"
 Provides-Extra: all
-Requires-Dist: perplexity-api[dev,driver]; extra == "all"
+Requires-Dist: perplexity-api[api,dev,driver]; extra == "all"
 Dynamic: license-file
 
 # Perplexity AI
@@ -117,7 +122,7 @@ client = perplexity.Client(cookies)
 response = client.search(
     "Complex query here",
     mode='pro',
-    model='gpt-4.5',
+    model='gpt-5.2',
     sources=['scholar']
 )
 ```
@@ -187,8 +192,8 @@ perplexity_cli = perplexity.Client()
 
 # model = model for mode, which can only be used in own accounts, that is {
 #     'auto': [None],
-#     'pro': [None, 'sonar', 'gpt-5.1', 'claude-4.5-sonnet', 'gemini-2.5-pro', 'grok-4'],
-#     'reasoning': [None, 'gpt-5.1-thingking', 'claude-4.5-sonnet-thinking', 'gemini-3.0-pro', 'kimi-k2-thinking'],
+#     'pro': [None, 'sonar', 'gpt-5.2', 'claude-4.5-sonnet', 'grok-4-1'],
+#     'reasoning': [None, 'gpt-5.2-thinking', 'claude-4.5-sonnet-thinking', 'gemini-3.0-pro', 'kimi-k2-thinking', 'grok-4.1-reasoning'],
 #     'deep research': [None]
 # }
 # sources = ['web', 'scholar', 'social']
@@ -216,7 +221,7 @@ perplexity_cookies = {
 
 perplexity_cli = perplexity.Client(perplexity_cookies)
 
-resp = perplexity_cli.search('Your query here', mode='reasoning', model='o3', sources=['web'], files={'myfile.txt': open('file.txt').read()}, stream=False, language='en-US', follow_up=None, incognito=False)
+resp = perplexity_cli.search('Your query here', mode='reasoning', model='gpt-5.2-thinking', sources=['web'], files={'myfile.txt': open('file.txt').read()}, stream=False, language='en-US', follow_up=None, incognito=False)
 print(resp)
 ```
 
@@ -250,8 +255,8 @@ async def test():
     # mode = ['auto', 'pro', 'reasoning', 'deep research']
     # model = model for mode, which can only be used in own accounts, that is {
     #     'auto': [None],
-    #     'pro': [None, 'sonar', 'gpt-5.1', 'claude-4.5-sonnet', 'gemini-2.5-pro', 'grok-4'],
-    #     'reasoning': [None, 'gpt-5.1-thingking', 'claude-4.5-sonnet-thinking', 'gemini-3.0-pro', 'kimi-k2-thinking'],
+    #     'pro': [None, 'sonar', 'gpt-5.2', 'claude-4.5-sonnet', 'grok-4-1'],
+    #     'reasoning': [None, 'gpt-5.2-thinking', 'claude-4.5-sonnet-thinking', 'gemini-3.0-pro', 'kimi-k2-thinking', 'grok-4.1-reasoning'],
     #     'deep research': [None]
     # }
     # sources = ['web', 'scholar', 'social']
@@ -283,7 +288,7 @@ perplexity_cookies = {
 async def test():
     perplexity_cli = await perplexity_async.Client(perplexity_cookies)
 
-    resp = await perplexity_cli.search('Your query here', mode='reasoning', model='o3', sources=['web'], files={'myfile.txt': open('file.txt').read()}, stream=False, language='en-US', follow_up=None, incognito=False)
+    resp = await perplexity_cli.search('Your query here', mode='reasoning', model='gpt-5.2-thinking', sources=['web'], files={'myfile.txt': open('file.txt').read()}, stream=False, language='en-US', follow_up=None, incognito=False)
     print(resp)
 
 asyncio.run(test())
@@ -308,6 +313,56 @@ async def test():
 
 asyncio.run(test())
 ```
+
+## FastAPI Backend
+
+Run the project as a FastAPI service with API key protection and support for search, streaming, file uploads, and account creation.
+
+1. Install server deps: `pip install -e ".[api]"` or `pip install -r requirements.txt`
+2. Set environment variables:
+   - `PPLX_API_KEY` (required): shared secret for clients (send via `X-API-Key` or `Authorization: Bearer ...`)
+   - `PPLX_COOKIES` (optional): JSON string of Perplexity cookies for pro modes
+   - `EMAILNATOR_COOKIES` (optional): JSON string used by `/v1/account` when no body cookies are provided
+3. Run locally: `uvicorn api.search:app --reload --port 8000`
+
+Example search (full response):
+
+```bash
+curl -X POST http://localhost:8000/v1/search \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -d '{"query":"Explain quantum computing","mode":"auto"}'
+```
+
+Streaming NDJSON:
+
+```bash
+curl -N -X POST http://localhost:8000/v1/search \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -H "Accept: application/x-ndjson" \
+  -d '{"query":"Give me a short story","stream":true}'
+```
+
+File upload (multipart):
+
+```bash
+curl -X POST http://localhost:8000/v1/search/upload \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -F query="Summarize this file" \
+  -F files=@document.pdf
+```
+
+Account creation with Emailnator cookies:
+
+```bash
+curl -X POST http://localhost:8000/v1/account \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -d '{"emailnator_cookies":{"XSRF-TOKEN":"...","_emailnator_token":"..."}}'
+```
+
+When deployed to Vercel, call the endpoints under `/api/search`, e.g. `https://<project>.vercel.app/api/search/v1/search`.
 
 ## How to Get Cookies
 
@@ -388,8 +443,8 @@ class Client:
 ```python
 {
     'auto': [None],
-    'pro': [None, 'sonar', 'gpt-5.1', 'claude-4.5-sonnet', 'gemini-2.5-pro', 'grok-4'],
-    'reasoning': [None, 'gpt-5.1-thinking', 'claude-4.5-sonnet-thinking', 'gemini-3.0-pro', 'kimi-k2-thinking'],
+    'pro': [None, 'sonar', 'gpt-5.2', 'claude-4.5-sonnet', 'grok-4-1'],
+    'reasoning': [None, 'gpt-5.2-thinking', 'claude-4.5-sonnet-thinking', 'gemini-3.0-pro', 'kimi-k2-thinking', 'grok-4.1-reasoning'],
     'deep research': [None]
 }
 ```

@@ -267,6 +267,56 @@ async def test():
 asyncio.run(test())
 ```
 
+## FastAPI Backend
+
+Run the project as a FastAPI service with API key protection and support for search, streaming, file uploads, and account creation.
+
+1. Install server deps: `pip install -e ".[api]"` or `pip install -r requirements.txt`
+2. Set environment variables:
+   - `PPLX_API_KEY` (required): shared secret for clients (send via `X-API-Key` or `Authorization: Bearer ...`)
+   - `PPLX_COOKIES` (optional): JSON string of Perplexity cookies for pro modes
+   - `EMAILNATOR_COOKIES` (optional): JSON string used by `/v1/account` when no body cookies are provided
+3. Run locally: `uvicorn api.search:app --reload --port 8000`
+
+Example search (full response):
+
+```bash
+curl -X POST http://localhost:8000/v1/search \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -d '{"query":"Explain quantum computing","mode":"auto"}'
+```
+
+Streaming NDJSON:
+
+```bash
+curl -N -X POST http://localhost:8000/v1/search \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -H "Accept: application/x-ndjson" \
+  -d '{"query":"Give me a short story","stream":true}'
+```
+
+File upload (multipart):
+
+```bash
+curl -X POST http://localhost:8000/v1/search/upload \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -F query="Summarize this file" \
+  -F files=@document.pdf
+```
+
+Account creation with Emailnator cookies:
+
+```bash
+curl -X POST http://localhost:8000/v1/account \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PPLX_API_KEY" \
+  -d '{"emailnator_cookies":{"XSRF-TOKEN":"...","_emailnator_token":"..."}}'
+```
+
+When deployed to Vercel, call the endpoints under `/api/search`, e.g. `https://<project>.vercel.app/api/search/v1/search`.
+
 ## How to Get Cookies
 
 ### Perplexity (to use your own account)
